@@ -6436,6 +6436,14 @@ angular.module("app", ['ui.router', 'hljs']).config(['$stateProvider', '$urlRout
         $scope.resetUnread();
     };
 
+    $scope.exportRequestsCsv = function () {
+        if (!$scope.token || !$scope.token.uuid) {
+            return;
+        }
+
+        window.location = '/token/' + $scope.token.uuid + '/requests/export/csv';
+    };
+
     $scope.getRequest = function (tokenId, requestId) {
         return $http.get('/token/' + tokenId + '/request/' + requestId).then(function (response) {
             return response.data;
