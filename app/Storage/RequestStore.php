@@ -42,4 +42,13 @@ interface RequestStore
      */
     public function deleteByToken(Token $token);
 
+    /**
+     * Iterates all requests for a token without loading all entries into memory.
+     *
+     * @param Token $token
+     * @param callable $callback
+     * @return void
+     */
+    public function iterate(Token $token, callable $callback);
+
 }
