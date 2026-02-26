@@ -79,6 +79,33 @@ class RequestStore implements \App\Storage\RequestStore
         )->values();
     }
 
+
+    /**
+     * @param Token $token
+     * @param callable $callback
+     * @return void
+     */
+    public function iterate(Token $token, callable $callback)
+    {
+        $cursor = 0;
+        $key = Request::getIdentifier($token->uuid);
+
+        do {
+            $result = $this->redis->hscan($key, $cursor);
+
+            if (!is_array($result) || count($result) < 2) {
+                break;
+            }
+
+            $cursor = (int)$result[0];
+            $entries = $result[1];
+
+            foreach ($entries as $request) {
+                $callback(json_decode($request));
+            }
+        } while ($cursor !== 0);
+    }
+
     /**
      * @param Token $token
      * @param Request $request

@@ -114,4 +114,31 @@ class RequestControllerTest extends TestCase
         sort($sortedAscTimestamps);
         $this->assertSame($sortedAscTimestamps, $timestamps,'The "created_at" field is not sorted in ascending order.');
     }
+
+
+    public function testExportCsv()
+    {
+        // Prevent throttling
+        $this->withoutMiddleware();
+
+        $tokenId = $this->json('POST', 'token')->json()['uuid'];
+
+        $this->call('POST', $tokenId, ['event' => 'signup']);
+        $this->call('POST', $tokenId, [], [], [], ['HTTP_X_CUSTOM_HEADER' => 'example'], json_encode(['hello' => 'world']));
+
+        $response = $this->call('GET', "token/$tokenId/requests/export/csv");
+
+        $this->assertEquals(200, $response->status());
+        $this->assertContains('text/csv', $response->headers->get('Content-Type'));
+        $this->assertContains('attachment;', $response->headers->get('Content-Disposition'));
+
+        $content = $response->getContent();
+
+        $this->assertContains('uuid,token_id,created_at,method,url,ip,hostname,user_agent,query,headers,request,content', $content);
+        $this->assertContains($tokenId, $content);
+        $this->assertContains('signup', $content);
+        $this->assertContains('hello', $content);
+    }
+
+
 }

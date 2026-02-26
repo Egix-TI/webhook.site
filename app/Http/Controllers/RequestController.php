@@ -11,6 +11,7 @@ use Illuminate\Cache\Repository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RequestController extends Controller
 {
@@ -128,6 +129,74 @@ class RequestController extends Controller
         $request = $this->requests->find($token, $requestId);
 
         return new JsonResponse($request);
+    }
+
+
+    /**
+     * @param string $tokenId
+     * @return StreamedResponse
+     */
+    public function exportCsv($tokenId)
+    {
+        $token = $this->tokens->find($tokenId);
+
+        $filename = sprintf('webhook-site-%s-requests.csv', $token->uuid);
+
+        $response = new StreamedResponse(function () use ($token) {
+            $output = fopen('php://output', 'w');
+
+            fputcsv($output, [
+                'uuid',
+                'token_id',
+                'created_at',
+                'method',
+                'url',
+                'ip',
+                'hostname',
+                'user_agent',
+                'query',
+                'headers',
+                'request',
+                'content',
+            ]);
+
+            $this->requests->iterate($token, function ($request) use ($output) {
+                fputcsv($output, [
+                    $request->uuid,
+                    $request->token_id,
+                    $request->created_at,
+                    $request->method,
+                    $request->url,
+                    $request->ip,
+                    $request->hostname,
+                    $request->user_agent,
+                    $this->toJsonString($request->query),
+                    $this->toJsonString($request->headers),
+                    $this->toJsonString(isset($request->request) ? $request->request : null),
+                    isset($request->content) ? $request->content : null,
+                ]);
+            });
+
+            fclose($output);
+        });
+
+        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
+        $response->headers->set('Content-Disposition', sprintf('attachment; filename="%s"', $filename));
+
+        return $response;
+    }
+
+    /**
+     * @param mixed $value
+     * @return string|null
+     */
+    private function toJsonString($value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        return json_encode($value);
     }
 
     /**
