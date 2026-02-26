@@ -215,6 +215,12 @@
                                         <input type="checkbox" ng-model="autoNavEnable"
                                                ga-on="click" ga-event-category="AutoNav" ga-event-action="toggle"/> Auto Navigate</label> &emsp;
 
+                                    <button type="button" class="btn btn-xs btn-default"
+                                            ng-click="exportRequestsCsv()"
+                                            title="Export all requests from this token to CSV">
+                                        Export CSV
+                                    </button> &emsp;
+
                                     <label class="small"><input type="checkbox" ng-model="hideDetails">
                                         Hide Details</label>
                                 </span>
