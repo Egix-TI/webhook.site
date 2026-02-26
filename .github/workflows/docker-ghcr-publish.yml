@@ -1,0 +1,40 @@
+# .github/workflows/docker-ghcr-publish.yml
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches: [master]  # ou troque para a branch desejada
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+      contents: read
+
+    env:
+      IMAGE: ghcr.io/egix-ti/webhook.site:1.0
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push egix-flow.api image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./back
+          file: ./back/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE_API }}
+
+      #- name: Disparar deploy no servidor
+      #  run: curl -X GET "http://216.238.98.50:20411/hook?access_key=WJ2x4w8kB6gUA9q6jydH717EeKsCEuitQggyQ1zXYH7DZblU"
