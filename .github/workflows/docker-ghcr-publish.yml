@@ -34,7 +34,7 @@ jobs:
           context: ./back
           file: ./back/Dockerfile
           push: true
-          tags: ${{ env.IMAGE_API }}
+          tags: ${{ env.IMAGE }}
 
       #- name: Disparar deploy no servidor
       #  run: curl -X GET "http://216.238.98.50:20411/hook?access_key=WJ2x4w8kB6gUA9q6jydH717EeKsCEuitQggyQ1zXYH7DZblU"
