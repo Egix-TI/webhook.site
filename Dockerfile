@@ -28,9 +28,16 @@ USER www-data
 ADD --chown=www-data:www-data /composer.json /var/www/html
 ADD --chown=www-data:www-data /composer.lock /var/www/html
 
-RUN composer global require hirak/prestissimo \
-    && composer install --no-interaction --no-autoloader --no-dev --prefer-dist --no-scripts \
-    && rm -rf /home/www-data/.composer/cache
+# Garante Composer 2 (ajuste conforme sua imagem base)
+RUN composer --version || true \
+    && composer self-update --2 || true
+
+RUN composer install --no-interaction --no-dev --prefer-dist --no-scripts \
+    && composer clear-cache
+
+#RUN composer global require hirak/prestissimo \
+#   && composer install --no-interaction --no-autoloader --no-dev --prefer-dist --no-scripts \
+#    && rm -rf /home/www-data/.composer/cache
 
 ADD --chown=www-data:www-data /storage /var/www/html/storage
 ADD --chown=www-data:www-data /bootstrap /var/www/html/bootstrap
