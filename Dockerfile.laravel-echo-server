@@ -1,0 +1,12 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+RUN npm install -g laravel-echo-server@1.6.3 \
+    && adduser -D -u 10001 echo
+
+USER echo
+
+EXPOSE 6001
+
+CMD ["laravel-echo-server", "start", "--force"]

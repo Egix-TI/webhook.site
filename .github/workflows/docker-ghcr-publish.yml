@@ -15,7 +15,8 @@ jobs:
       contents: read
 
     env:
-      IMAGE: ghcr.io/egix-ti/webhooksite:1.0
+      IMAGE: ghcr.io/egix-ti/webhook-site:1.0
+      IMAGE_ECHO: ghcr.io/egix-ti/laravel-echo-server:1.0
 
     steps:
       - name: Checkout source code
@@ -28,13 +29,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push egix-flow.api image
+      - name: Build and push webhook-site image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ${{ env.IMAGE }}
+
+      - name: Build and push laravel-echo-server image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.laravel-echo-server
+          push: true
+          tags: ${{ env.IMAGE_ECHO }}
 
       #- name: Disparar deploy no servidor
       #  run: curl -X GET "http://216.238.98.50:20411/hook?access_key=WJ2x4w8kB6gUA9q6jydH717EeKsCEuitQggyQ1zXYH7DZblU"
