@@ -117,7 +117,7 @@
             <div id="request" class="col-sm-9 col-sm-offset-3 col-md-10 col-md-offset-2 main">
                 <div id="rate-limit-warning"
                      class="alert alert-warning"
-                     ng-show="hasRequests && requests.total >= appConfig.MaxRequests">
+                     ng-show="hasRequests && appConfig.MaxRequests > 0 && requests.total >= appConfig.MaxRequests">
                     <p><strong>This URL received over {{ appConfig.MaxRequests }} requests and can't accept more
                             webhooks.</strong></p>
                     <p>New requests sent to this URL will return HTTP status code 410 Gone and
