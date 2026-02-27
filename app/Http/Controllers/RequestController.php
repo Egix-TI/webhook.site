@@ -88,7 +88,9 @@ class RequestController extends Controller
      */
     private function guardOverQuota($token)
     {
-        if ($this->tokens->countRequests($token) >= config('app.max_requests')) {
+        $maxRequests = (int) config('app.max_requests');
+
+        if ($maxRequests > 0 && $this->tokens->countRequests($token) >= $maxRequests) {
             abort(Response::HTTP_GONE, 'Too many requests, please create a new URL/token');
         }
     }
