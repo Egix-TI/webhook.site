@@ -5,7 +5,6 @@ namespace App\Storage\Redis;
 use App\Storage\Request;
 use App\Storage\Token;
 use Illuminate\Support\Facades\Redis;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 
 class TokenStore implements \App\Storage\TokenStore
@@ -35,7 +34,11 @@ class TokenStore implements \App\Storage\TokenStore
             throw new GoneHttpException('Token not found');
         }
 
-        $this->redis->expire(Token::getIdentifier($tokenId), config('app.expiry'));
+        $expiry = (int)config('app.expiry');
+
+        if ($expiry > 0) {
+            $this->redis->expire(Token::getIdentifier($tokenId), $expiry);
+        }
 
         return new Token(json_decode($result, true));
     }
@@ -55,7 +58,13 @@ class TokenStore implements \App\Storage\TokenStore
      */
     public function store(Token $token)
     {
-        $this->redis->setex(Token::getIdentifier($token->uuid), config('app.expiry'), json_encode($token->attributes()));
+        $expiry = (int)config('app.expiry');
+
+        if ($expiry > 0) {
+            $this->redis->setex(Token::getIdentifier($token->uuid), $expiry, json_encode($token->attributes()));
+        } else {
+            $this->redis->set(Token::getIdentifier($token->uuid), json_encode($token->attributes()));
+        }
 
         return $token;
     }

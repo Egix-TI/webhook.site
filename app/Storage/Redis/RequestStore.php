@@ -38,8 +38,6 @@ class RequestStore implements \App\Storage\RequestStore
             throw new NotFoundHttpException('Request not found');
         }
 
-        $this->redis->expire(Request::getIdentifier($token->uuid), config('app.expiry'));
-
         return new Request(json_decode($result, true));
     }
 
@@ -61,7 +59,7 @@ class RequestStore implements \App\Storage\RequestStore
                 return json_decode($request);
             }
         );
-        
+
         $requests = $requests->sortBy(
             function ($request) {
                 return Carbon::createFromFormat(
@@ -72,7 +70,7 @@ class RequestStore implements \App\Storage\RequestStore
             SORT_REGULAR,
             $sorting === 'newest'
         );
-        
+
         return $requests->forPage(
             $page,
             $perPage
@@ -121,7 +119,7 @@ class RequestStore implements \App\Storage\RequestStore
                 json_encode($request->attributes())
             );
 
-        $this->redis->expire(Request::getIdentifier($token->uuid), config('app.expiry'));
+        $this->setRequestFieldExpiry($token, $request->uuid);
 
         return $result;
     }
@@ -152,4 +150,27 @@ class RequestStore implements \App\Storage\RequestStore
             ->del(Request::getIdentifier($token->uuid));
     }
 
+    /**
+     * Applies TTL only to the hash field (request), keeping the webhook hash key itself alive.
+     *
+     * @param Token $token
+     * @param string $requestId
+     * @return void
+     */
+    private function setRequestFieldExpiry(Token $token, string $requestId): void
+    {
+        $requestExpiry = (int)config('app.request_expiry');
+
+        if ($requestExpiry <= 0) {
+            return;
+        }
+
+        $this->redis->command('HEXPIRE', [
+            Request::getIdentifier($token->uuid),
+            $requestExpiry,
+            'FIELDS',
+            1,
+            $requestId,
+        ]);
+    }
 }

@@ -12,8 +12,12 @@ return [
     // Set to 0 or a negative value to disable the request cap.
     'max_requests' => env('WEBHOOK_MAX_REQUESTS', 0),
 
-    // Requests and tokens will expire in 7 days (default)
-    'expiry' => env('WEBHOOK_EXPIRY', 604800),
+    // Backward compatibility: token expiration (in seconds). Set to 0 or a negative value to disable.
+    // Tokens now default to never expiring.
+    'expiry' => env('WEBHOOK_EXPIRY', 0),
+
+    // Request payload retention (in seconds). Defaults to 90 days.
+    'request_expiry' => env('WEBHOOK_REQUEST_EXPIRY', 7776000),
 
     /*
     |--------------------------------------------------------------------------
