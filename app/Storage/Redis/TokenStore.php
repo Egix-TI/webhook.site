@@ -35,8 +35,6 @@ class TokenStore implements \App\Storage\TokenStore
             throw new GoneHttpException('Token not found');
         }
 
-        $this->redis->expire(Token::getIdentifier($tokenId), config('app.expiry'));
-
         return new Token(json_decode($result, true));
     }
 
@@ -46,7 +44,15 @@ class TokenStore implements \App\Storage\TokenStore
      */
     public function countRequests(Token $token)
     {
-        return $this->redis->hlen(Request::getIdentifier($token->uuid));
+        $requestExpiry = (int)config('app.request_expiry');
+
+        if ($requestExpiry <= 0) {
+            return $this->redis->zcard(Request::getIdentifier($token->uuid));
+        }
+
+        $minScore = time() - $requestExpiry;
+
+        return $this->redis->zcount(Request::getIdentifier($token->uuid), $minScore, '+inf');
     }
 
     /**
@@ -55,7 +61,7 @@ class TokenStore implements \App\Storage\TokenStore
      */
     public function store(Token $token)
     {
-        $this->redis->setex(Token::getIdentifier($token->uuid), config('app.expiry'), json_encode($token->attributes()));
+        $this->redis->set(Token::getIdentifier($token->uuid), json_encode($token->attributes()));
 
         return $token;
     }
