@@ -16,7 +16,7 @@ class Request extends Entity
     public static function getIdentifier($tokenId, $requestId = null)
     {
         if ($requestId) {
-            return sprintf('token:%s:request:%s', $tokenId, $requestId);
+            return sprintf('token:%s:requests:%s', $tokenId, $requestId);
         }
 
         return sprintf('token:%s:requests', $tokenId);

@@ -5,7 +5,6 @@ namespace App\Storage\Redis;
 use App\Storage\Request;
 use App\Storage\Token;
 use Illuminate\Support\Facades\Redis;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 
 class TokenStore implements \App\Storage\TokenStore
@@ -44,15 +43,7 @@ class TokenStore implements \App\Storage\TokenStore
      */
     public function countRequests(Token $token)
     {
-        $requestExpiry = (int)config('app.request_expiry');
-
-        if ($requestExpiry <= 0) {
-            return $this->redis->zcard(Request::getIdentifier($token->uuid));
-        }
-
-        $minScore = time() - $requestExpiry;
-
-        return $this->redis->zcount(Request::getIdentifier($token->uuid), $minScore, '+inf');
+        return $this->redis->hlen(Request::getIdentifier($token->uuid));
     }
 
     /**

@@ -32,9 +32,7 @@ class RequestStore implements \App\Storage\RequestStore
      */
     public function find(Token $token, $requestId)
     {
-        $this->deleteExpiredRequests($token);
-
-        $result = $this->redis->get(Request::getIdentifier($token->uuid, $requestId));
+        $result = $this->redis->hget(Request::getIdentifier($token->uuid), $requestId);
 
         if (!$result) {
             throw new NotFoundHttpException('Request not found');
@@ -52,39 +50,16 @@ class RequestStore implements \App\Storage\RequestStore
      */
     public function all(Token $token, $page = 1, $perPage = 50, $sorting = 'oldest')
     {
-        $this->deleteExpiredRequests($token);
-
-        $requestIds = $sorting === 'newest'
-            ? $this->redis->zrevrange(Request::getIdentifier($token->uuid), 0, -1)
-            : $this->redis->zrange(Request::getIdentifier($token->uuid), 0, -1);
-
-        if (empty($requestIds)) {
-            return collect();
-        }
-
-        $requestKeys = array_map(function ($requestId) use ($token) {
-            return Request::getIdentifier($token->uuid, $requestId);
-        }, $requestIds);
-
-        $requestsByIndex = collect($this->redis->mget($requestKeys));
-        $missingRequestIds = collect($requestIds)
-            ->zip($requestsByIndex)
-            ->filter(function ($pair) {
-                return !$pair[1];
-            })
-            ->pluck(0)
-            ->all();
-
-        if (!empty($missingRequestIds)) {
-            $this->redis->zrem(Request::getIdentifier($token->uuid), ...$missingRequestIds);
-        }
-
-        $requests = $requestsByIndex
-            ->filter()
-            ->map(function ($request) {
+        $requests = collect(
+            $this->redis->hgetall(Request::getIdentifier($token->uuid))
+        )
+        ->filter()
+        ->map(
+            function ($request) {
                 return json_decode($request);
-            });
-        
+            }
+        );
+
         $requests = $requests->sortBy(
             function ($request) {
                 return Carbon::createFromFormat(
@@ -95,7 +70,7 @@ class RequestStore implements \App\Storage\RequestStore
             SORT_REGULAR,
             $sorting === 'newest'
         );
-        
+
         return $requests->forPage(
             $page,
             $perPage
@@ -110,27 +85,23 @@ class RequestStore implements \App\Storage\RequestStore
      */
     public function iterate(Token $token, callable $callback)
     {
-        $this->deleteExpiredRequests($token);
+        $cursor = 0;
+        $key = Request::getIdentifier($token->uuid);
 
-        $requestIds = $this->redis->zrange(Request::getIdentifier($token->uuid), 0, -1);
+        do {
+            $result = $this->redis->hscan($key, $cursor);
 
-        if (empty($requestIds)) {
-            return;
-        }
-
-        foreach (array_chunk($requestIds, 200) as $requestIdChunk) {
-            $keys = array_map(function ($requestId) use ($token) {
-                return Request::getIdentifier($token->uuid, $requestId);
-            }, $requestIdChunk);
-
-            foreach ($this->redis->mget($keys) as $serializedRequest) {
-                if (!$serializedRequest) {
-                    continue;
-                }
-
-                $callback(json_decode($serializedRequest));
+            if (!is_array($result) || count($result) < 2) {
+                break;
             }
-        }
+
+            $cursor = (int)$result[0];
+            $entries = $result[1];
+
+            foreach ($entries as $request) {
+                $callback(json_decode($request));
+            }
+        } while ($cursor !== 0);
     }
 
     /**
@@ -140,21 +111,17 @@ class RequestStore implements \App\Storage\RequestStore
      */
     public function store(Token $token, Request $request)
     {
-        $this->deleteExpiredRequests($token);
+        $result = $this
+            ->redis
+            ->hmset(
+                Request::getIdentifier($token->uuid),
+                $request->uuid,
+                json_encode($request->attributes())
+            );
 
-        $requestKey = Request::getIdentifier($token->uuid, $request->uuid);
-        $requestExpiry = (int)config('app.request_expiry');
+        $this->setRequestFieldExpiry($token, $request->uuid);
 
-        if ($requestExpiry > 0) {
-            $this->redis->setex($requestKey, $requestExpiry, json_encode($request->attributes()));
-        } else {
-            $this->redis->set($requestKey, json_encode($request->attributes()));
-        }
-
-        $createdAt = Carbon::createFromFormat('Y-m-d H:i:s', $request->created_at)->getTimestamp();
-        $this->redis->zadd(Request::getIdentifier($token->uuid), $createdAt, $request->uuid);
-
-        return $request;
+        return $result;
     }
 
     /**
@@ -164,9 +131,12 @@ class RequestStore implements \App\Storage\RequestStore
      */
     public function delete(Token $token, Request $request)
     {
-        $this->redis->zrem(Request::getIdentifier($token->uuid), $request->uuid);
-
-        return $this->redis->del(Request::getIdentifier($token->uuid, $request->uuid));
+        return $this
+            ->redis
+            ->hdel(
+                Request::getIdentifier($token->uuid),
+                $request->uuid
+            );
     }
 
     /**
@@ -175,25 +145,19 @@ class RequestStore implements \App\Storage\RequestStore
      */
     public function deleteByToken(Token $token)
     {
-        $requestIds = $this->redis->zrange(Request::getIdentifier($token->uuid), 0, -1);
-        $requestKeys = array_map(function ($requestId) use ($token) {
-            return Request::getIdentifier($token->uuid, $requestId);
-        }, $requestIds);
-
-        if (!empty($requestKeys)) {
-            $this->redis->del(...$requestKeys);
-        }
-
-        return $this->redis->del(Request::getIdentifier($token->uuid));
+        return $this
+            ->redis
+            ->del(Request::getIdentifier($token->uuid));
     }
 
     /**
-     * Removes expired request ids from the token index and deletes request payloads.
+     * Applies TTL only to the hash field (request), keeping the webhook hash key itself alive.
      *
      * @param Token $token
+     * @param string $requestId
      * @return void
      */
-    private function deleteExpiredRequests(Token $token)
+    private function setRequestFieldExpiry(Token $token, string $requestId): void
     {
         $requestExpiry = (int)config('app.request_expiry');
 
@@ -201,22 +165,12 @@ class RequestStore implements \App\Storage\RequestStore
             return;
         }
 
-        $threshold = time() - $requestExpiry;
-        $expiredRequestIds = $this->redis->zrangebyscore(Request::getIdentifier($token->uuid), '-inf', $threshold);
-
-        if (empty($expiredRequestIds)) {
-            return;
-        }
-
-        $expiredRequestKeys = array_map(function ($requestId) use ($token) {
-            return Request::getIdentifier($token->uuid, $requestId);
-        }, $expiredRequestIds);
-
-        if (!empty($expiredRequestKeys)) {
-            $this->redis->del(...$expiredRequestKeys);
-        }
-
-        $this->redis->zremrangebyscore(Request::getIdentifier($token->uuid), '-inf', $threshold);
+        $this->redis->command('HEXPIRE', [
+            Request::getIdentifier($token->uuid),
+            $requestExpiry,
+            'FIELDS',
+            1,
+            $requestId,
+        ]);
     }
-
 }
